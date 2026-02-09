@@ -1,9 +1,11 @@
 const express = require("express");
+const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 const { protect } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
+// GET ALL USERS (Admin only)
 router.get("/", protect, async (req, res) => {
   try {
     if (req.user.role !== "admin") {
@@ -13,48 +15,49 @@ router.get("/", protect, async (req, res) => {
     const users = await User.find().select("-password");
     res.json(users);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
+// GET SINGLE USER BY ID
 router.get("/:id", protect, async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select("-password");
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
+    // Only admin or owner can view
     if (req.user.id !== user._id.toString() && req.user.role !== "admin") {
       return res.status(403).json({ message: "Not authorized" });
     }
 
     res.json(user);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
+// UPDATE USER
 router.put("/:id", protect, async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select("+password");
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (!user) return res.status(404).json({ message: "User not found" });
 
     if (req.user.id !== user._id.toString() && req.user.role !== "admin") {
       return res.status(403).json({ message: "Not authorized" });
     }
 
     const { password, role, ...rest } = req.body;
-
     Object.assign(user, rest);
 
+    // Update password if provided
     if (password) {
-      user.password = password;
+      const salt = await bcrypt.genSalt(10);
+      user.password = await bcrypt.hash(password, salt);
     }
 
+    // Only admin can update role
     if (role && req.user.role === "admin") {
       user.role = role;
     }
@@ -64,17 +67,16 @@ router.put("/:id", protect, async (req, res) => {
     const { password: pw, ...safeUser } = user.toObject();
     res.json(safeUser);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
+// DELETE USER
 router.delete("/:id", protect, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (!user) return res.status(404).json({ message: "User not found" });
 
     if (req.user.id !== user._id.toString() && req.user.role !== "admin") {
       return res.status(403).json({ message: "Not authorized" });
@@ -83,33 +85,24 @@ router.delete("/:id", protect, async (req, res) => {
     await user.deleteOne();
     res.json({ message: "User deleted successfully" });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
+// UPDATE USER LOCATION
 router.put("/location", protect, async (req, res) => {
   try {
     const { lat, lng, locationString } = req.body;
-
     if (lat == null || lng == null) {
-      return res.status(400).json({
-        message: "Latitude and longitude required",
-      });
+      return res.status(400).json({ message: "Latitude and longitude required" });
     }
 
     const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    user.location = {
-      type: "Point",
-      coordinates: [lng, lat], 
-    };
-
-    if (locationString) {
-      user.locationString = locationString;
-    }
+    user.location = { type: "Point", coordinates: [lng, lat] };
+    if (locationString) user.locationString = locationString;
 
     await user.save();
 
@@ -119,6 +112,7 @@ router.put("/location", protect, async (req, res) => {
       locationString: user.locationString,
     });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 });
