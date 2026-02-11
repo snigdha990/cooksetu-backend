@@ -13,10 +13,11 @@ const CookSchema = new mongoose.Schema(
       type: {
         type: String,
         enum: ["Point"],
+        required: true,
       },
       coordinates: {
-        type: [Number], 
-        index: "2dsphere",
+        type: [Number],
+        required: true,
       },
     },
 
@@ -60,5 +61,7 @@ const CookSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+CookSchema.index({ location: "2dsphere" });
 
 module.exports = mongoose.model("Cook", CookSchema);
