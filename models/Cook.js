@@ -2,19 +2,55 @@ const mongoose = require("mongoose");
 
 const CookSchema = new mongoose.Schema(
   {
-    user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    location: {
-      type: { type: String, enum: ["Point"], default: "Point" },
-      coordinates: { type: [Number], required: false }, 
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      unique: true,
     },
 
-    locationString: { type: String, required: true },
+    location: {
+      type: {
+        type: String,
+        enum: ["Point"],
+      },
+      coordinates: {
+        type: [Number], 
+        index: "2dsphere",
+      },
+    },
 
-    cuisines: { type: [String], default: [] },
-    experience: { type: Number, required: true },
-    price: { type: Number, required: true },
-    availability: { type: Boolean, default: true },
-    phoneNum: { type: String, required: true, unique: true, trim: true },
+    locationString: {
+      type: String,
+      default: "",
+    },
+
+    cuisines: {
+      type: [String],
+      default: [],
+    },
+
+    experience: {
+      type: Number,
+      required: true,
+    },
+
+    price: {
+      type: Number,
+      required: true,
+    },
+
+    availability: {
+      type: Boolean,
+      default: true,
+    },
+
+    phoneNum: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+    },
 
     status: {
       type: String,
@@ -24,7 +60,5 @@ const CookSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-
-CookSchema.index({ location: "2dsphere" });
 
 module.exports = mongoose.model("Cook", CookSchema);

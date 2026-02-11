@@ -1,21 +1,39 @@
 const express = require("express");
 const User = require("../models/User");
-const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 
 const router = express.Router();
 
-// SIGNUP
 router.post("/signup", async (req, res) => {
-  const { name, email, password, role, phoneNum } = req.body;
-
   try {
+    const { name, email, password, role, phoneNum, lat, lng, locationString } = req.body;
+
+    if (!name || !email || !password || !phoneNum) {
+      return res.status(400).json({ message: "Name, email, password, and phone number are required" });
+    }
+
     const existingUser = await User.findOne({ $or: [{ email }, { phoneNum }] });
     if (existingUser) {
       return res.status(400).json({ message: "Email or phone number already registered" });
     }
 
-    const newUser = new User({ name, email, password, role, phoneNum });
+    const hashedPassword = await bcrypt.hash(password, 10);
+    let location;
+    if (lat !== undefined && lng !== undefined) {
+      location = { type: "Point", coordinates: [Number(lng), Number(lat)] };
+    }
+
+    const newUser = new User({
+      name,
+      email,
+      password: hashedPassword,
+      role: role || "user",
+      phoneNum,
+      location,
+      locationString: locationString || "",
+    });
+
     await newUser.save();
 
     const token = jwt.sign(
@@ -26,31 +44,48 @@ router.post("/signup", async (req, res) => {
 
     const { password: pw, ...userWithoutPassword } = newUser.toObject();
 
-    res.status(201).json({ token, user: userWithoutPassword });
+    return res.status(201).json({ token, user: userWithoutPassword });
+
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Signup error:", err);
+    return res.status(500).json({ message: err.message || "Server error" });
   }
 });
 
-// LOGIN
 router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-
   try {
+    let { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required" });
+    }
+
+    email = email.trim().toLowerCase();
+    password = password.trim();
+
     const user = await User.findOne({ email }).select("+password");
-    if (!user) return res.status(401).json({ message: "Invalid credentials" });
+    if (!user) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(401).json({ message: "Invalid credentials" });
+    if (!isMatch) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
 
-    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "1d" });
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "1d" }
+    );
+
     const { password: pw, ...userWithoutPassword } = user.toObject();
 
-    res.json({ token, user: userWithoutPassword });
+    return res.status(200).json({ token, user: userWithoutPassword });
+
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Login error:", err);
+    return res.status(500).json({ message: err.message || "Server error" });
   }
 });
 

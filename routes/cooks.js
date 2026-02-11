@@ -10,20 +10,19 @@ router.get("/admin", protect, adminOnly, async (req, res) => {
     const cooks = await Cook.find().populate("user", "-password");
     res.json(cooks);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
 // Get all approved cooks
 router.get("/", async (req, res) => {
   try {
-    const cooks = await Cook.find({ status: "approved" }).populate(
-      "user",
-      "-password"
-    );
+    const cooks = await Cook.find({ status: "approved" }).populate("user", "-password");
     res.json(cooks);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -39,16 +38,14 @@ router.get("/nearby", async (req, res) => {
     const cooks = await Cook.aggregate([
       {
         $geoNear: {
-          near: {
-            type: "Point",
-            coordinates: [Number(lng), Number(lat)],
-          },
+          near: { type: "Point", coordinates: [Number(lng), Number(lat)] },
           distanceField: "distance",
           maxDistance: 10000, // 10km
           spherical: true,
           query: {
             availability: true,
             status: "approved",
+            location: { $exists: true, $ne: null },
           },
         },
       },
@@ -56,35 +53,47 @@ router.get("/nearby", async (req, res) => {
 
     res.json(cooks);
   } catch (err) {
-    console.error("Nearby error:", err);
+    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
-
 // Cook registration
 router.post("/", protect, async (req, res) => {
   try {
-    const existing = await Cook.findOne({ user: req.user._id });
-    if (existing) return res.status(400).json({ message: "Cook profile already exists" });
+    const existing = await Cook.findOne({ user: req.user.id });
+    if (existing) {
+      return res.status(400).json({ message: "Cook profile already exists" });
+    }
+
+    const { lat, lng, locationString, ...rest } = req.body;
+    let location = undefined;
+    if (lat !== undefined && lng !== undefined) {
+      location = { type: "Point", coordinates: [Number(lng), Number(lat)] };
+    }
 
     const cook = await Cook.create({
-      user: req.user._id,
-      ...req.body,
+      user: req.user.id,
+      location,
+      locationString: locationString || "",
+      ...rest,
     });
+
     res.status(201).json(cook);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
 // Get my cook profile
 router.get("/me", protect, async (req, res) => {
   try {
-    const cook = await Cook.findOne({ user: req.user._id });
+    const cook = await Cook.findOne({ user: req.user.id });
     res.json(cook);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -98,7 +107,8 @@ router.patch("/:id/status", protect, adminOnly, async (req, res) => {
     await cook.save();
     res.json(cook);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 

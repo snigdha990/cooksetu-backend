@@ -26,7 +26,6 @@ router.get("/:id", protect, async (req, res) => {
     const user = await User.findById(req.params.id).select("-password");
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Only admin or owner can view
     if (req.user.id !== user._id.toString() && req.user.role !== "admin") {
       return res.status(403).json({ message: "Not authorized" });
     }
@@ -51,19 +50,16 @@ router.put("/:id", protect, async (req, res) => {
     const { password, role, ...rest } = req.body;
     Object.assign(user, rest);
 
-    // Update password if provided
     if (password) {
       const salt = await bcrypt.genSalt(10);
       user.password = await bcrypt.hash(password, salt);
     }
 
-    // Only admin can update role
     if (role && req.user.role === "admin") {
       user.role = role;
     }
 
     await user.save();
-
     const { password: pw, ...safeUser } = user.toObject();
     res.json(safeUser);
   } catch (err) {

@@ -3,7 +3,12 @@ const bcrypt = require("bcryptjs");
 
 const UserSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true, trim: true },
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
     email: {
       type: String,
       required: true,
@@ -11,17 +16,20 @@ const UserSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
+
     password: {
       type: String,
       required: true,
-      select: false,
       minlength: 6,
+      select: false,
     },
+
     role: {
       type: String,
-      enum: ["cook", "user", "admin"],
+      enum: ["user", "cook", "admin"],
       default: "user",
     },
+
     phoneNum: {
       type: String,
       required: true,
@@ -32,27 +40,26 @@ const UserSchema = new mongoose.Schema(
       type: {
         type: String,
         enum: ["Point"],
-        default: "Point",
       },
       coordinates: {
-        type: [Number],
-        default: undefined,
+        type: [Number], 
+        index: "2dsphere",
       },
     },
+
     locationString: {
       type: String,
       default: "",
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
-UserSchema.index({ location: "2dsphere" });
-
-UserSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
+UserSchema.pre("save", async function () {
+  if (!this.isModified("password")) return;
   this.password = await bcrypt.hash(this.password, 10);
-  next();
 });
 
 UserSchema.methods.matchPassword = function (enteredPassword) {
