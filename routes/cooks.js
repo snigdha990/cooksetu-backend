@@ -40,14 +40,39 @@ router.get("/nearby", async (req, res) => {
       {
         $geoNear: {
           near: { type: "Point", coordinates: [Number(lng), Number(lat)] },
-          distanceField: "distance",
+          distanceField: "distanceMeters",
           maxDistance: 10000, // 10km
           spherical: true,
-          query: {
-            availability: true,
-            status: "approved",
-            location: { $exists: true, $ne: null },
-          },
+          query: { availability: true, status: "approved", location: { $exists: true } },
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "user",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      { $unwind: "$user" },
+      {
+        $addFields: {
+          distance: { $divide: ["$distanceMeters", 1000] }, // convert meters to km
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          location: 1,
+          locationString: 1,
+          cuisines: 1,
+          experience: 1,
+          phoneNum: 1,
+          price: 1,
+          status: 1,
+          distance: { $round: ["$distance", 2] }, // round to 2 decimals
+          "user._id": 1,
+          "user.name": 1,
         },
       },
     ]);
@@ -58,6 +83,7 @@ router.get("/nearby", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 // Get my cook profile
 router.get("/me", protect, async (req, res) => {

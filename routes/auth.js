@@ -13,12 +13,16 @@ router.post("/signup", async (req, res) => {
       return res.status(400).json({ message: "Name, email, password, and phone number are required" });
     }
 
-    const existingUser = await User.findOne({ $or: [{ email }, { phoneNum }] });
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const existingUser = await User.findOne({
+      $or: [{ email: normalizedEmail }, { phoneNum }],
+    });
+
     if (existingUser) {
       return res.status(400).json({ message: "Email or phone number already registered" });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
     let location;
     if (lat !== undefined && lng !== undefined) {
       location = { type: "Point", coordinates: [Number(lng), Number(lat)] };
@@ -26,9 +30,10 @@ router.post("/signup", async (req, res) => {
 
     const newUser = new User({
       name,
-      email,
-      password: hashedPassword,
-      role: role || "user",
+      email: normalizedEmail,
+      password, 
+      // role: role || "user",
+      role: role === "cook" ? "cook" : "user",
       phoneNum,
       location,
       locationString: locationString || "",
@@ -52,23 +57,21 @@ router.post("/signup", async (req, res) => {
   }
 });
 
+
 router.post("/login", async (req, res) => {
   try {
-    let { email, password } = req.body;
+    const { email, password } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ message: "Email and password are required" });
     }
 
-    email = email.trim();
-    password = password.trim();
-
-    const user = await User.findOne({ email }).select("+password");
+    const user = await User.findOne({ email: email.trim().toLowerCase() }).select("+password");
     if (!user) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await user.matchPassword(password.trim());
     if (!isMatch) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
@@ -85,7 +88,7 @@ router.post("/login", async (req, res) => {
 
   } catch (err) {
     console.error("Login error:", err);
-    return res.status(500).json({ message: err.message || "Server error" });
+    return res.status(500).json({ message: "Server error" });
   }
 });
 
